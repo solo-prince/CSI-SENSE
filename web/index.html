@@ -1,0 +1,146 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>CSI Sense: Wi-Fi Presence &amp; Breathing Monitor</title>
+<style>
+:root{--bg:#060a11;--card:#0d1522;--line:#1a2940;--fg:#e4edf8;--mut:#7f95b1;--g:#2cff8a;--c:#27d3ff;--r:#ff4d6d;--y:#ffc94a}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(1200px 500px at 70% -10%,#0f2038,transparent),var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--line)}
+.brand h1{margin:0;font-size:20px;letter-spacing:.3px}.brand h1 span{color:var(--c)}.brand p{margin:2px 0 0;color:var(--mut);font-size:13px}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--mut);display:inline-block;margin-right:6px}.dot.live{background:var(--g);box-shadow:0 0 8px var(--g)}
+button{background:var(--card);color:var(--fg);border:1px solid var(--line);padding:8px 14px;border-radius:8px;cursor:pointer;font:inherit;font-size:14px}
+button:hover{border-color:var(--c)}button.on{border-color:var(--g);color:var(--g)}
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:18px 28px 0}
+.step{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;gap:12px}
+.step i{font-style:normal;flex:none;width:28px;height:28px;border-radius:50%;background:#10304a;color:var(--c);display:grid;place-items:center;font-weight:700}
+.step b{display:block;font-size:14px}.step span{color:var(--mut);font-size:13px}
+main{display:grid;grid-template-columns:1.7fr 1fr;gap:16px;padding:16px 28px}
+@media(max-width:950px){main{grid-template-columns:1fr}.how{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.card h2{margin:0 0 10px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:1.6px;font-weight:600}
+canvas{width:100%;display:block}#field{height:340px}#spark{height:130px}
+.hero{display:flex;gap:14px;align-items:center;border-radius:12px;padding:14px;border:1px solid var(--line);background:#0a111c}
+.hero .ic{font-size:34px;width:56px;height:56px;border-radius:50%;display:grid;place-items:center;border:2px solid;flex:none}
+.hero h3{margin:0;font-size:20px}.hero p{margin:2px 0 0;color:var(--mut);font-size:13.5px}
+.s-empty{color:var(--mut)}.s-moving{color:var(--y)}.s-still{color:var(--g)}.s-hold{color:var(--c)}.s-calibrating{color:var(--r)}
+.bar{height:6px;background:#12203a;border-radius:9px;margin-top:10px;overflow:hidden;display:none}.bar div{height:100%;width:0;background:var(--r);transition:width .8s}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.k{background:#0a111c;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.k small{color:var(--mut);font-size:12px;display:block}.k b{font-size:24px;font-variant-numeric:tabular-nums;display:block;line-height:1.2}.k em{font-style:normal;color:var(--mut);font-size:11.5px}
+.ev{list-style:none;margin:0;padding:0;max-height:170px;overflow:auto;font-size:13px}
+.ev li{padding:6px 0;border-bottom:1px solid var(--line);display:flex;gap:10px}.ev time{color:var(--mut);font-variant-numeric:tabular-nums;flex:none}
+.leg{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--mut);margin-top:8px}
+.leg span:before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:currentColor}
+.note{color:var(--mut);font-size:12.5px;margin-top:10px}
+details{margin-top:12px}summary{cursor:pointer;color:var(--c);font-size:13px}pre{font-size:11px;color:var(--mut);white-space:pre-wrap;word-break:break-all;max-height:120px;overflow:auto}
+footer{padding:6px 28px 28px;color:var(--mut);font-size:12.5px}footer b{color:var(--fg)}
+</style></head><body>
+<header>
+ <div class="brand"><h1>CSI <span>SENSE</span></h1><p>Detects people and breathing using only Wi-Fi signals. No camera, no wearable.</p></div>
+ <div class="tools"><span><i class="dot" id="dot"></i><span id="conn">Not connected</span></span>
+  <button id="bc">Connect sensor</button><button id="bd">Demo mode</button><button id="bx">Export CSV</button><button id="bf">Fullscreen</button></div>
+</header>
+
+<section class="how">
+ <div class="step"><i>1</i><div><b>Transmit</b><span>An ESP32 sends 100 small Wi-Fi packets every second.</span></div></div>
+ <div class="step"><i>2</i><div><b>Measure</b><span>An ESP32-C3 reads how each packet's signal (CSI) was changed on the way.</span></div></div>
+ <div class="step"><i>3</i><div><b>Interpret</b><span>A body in the path disturbs the signal. Walking is a big change, breathing a slow small one.</span></div></div>
+</section>
+
+<main>
+<div>
+ <div class="card"><h2>Live sensing field</h2><canvas id="field"></canvas>
+  <div class="leg"><span class="s-empty">Empty</span><span class="s-moving">Moving</span><span class="s-still">Resting + breathing</span><span class="s-hold">Recently present</span></div>
+  <div class="note">The figure shows <i>whether</i> someone is between the two boards, not where they stand. Position tracking needs 3 or more receivers.</div></div>
+ <div class="card" style="margin-top:16px"><h2>Signal disturbance over time</h2><canvas id="spark"></canvas>
+  <div class="leg"><span style="color:var(--g)">Measured disturbance</span><span style="color:var(--r)">Detection threshold (learned automatically)</span></div>
+  <div class="note">When the green line rises above the red line, the system decides that someone is moving.</div></div>
+</div>
+<div>
+ <div class="card"><h2>Current status</h2>
+  <div class="hero"><div class="ic s-empty" id="ic">…</div><div><h3 id="ht">Waiting for sensor</h3><p id="hd">Click “Connect sensor”, or try Demo mode.</p></div></div>
+  <div class="bar" id="bar"><div id="bf2"></div></div>
+  <div class="grid">
+   <div class="k" title="Estimated from slow rhythmic changes in the signal, only while the person is still"><small>Breathing rate</small><b id="bpm">--</b><em>breaths per minute</em></div>
+   <div class="k" title="How clear the breathing rhythm is. Above 6 means a reliable reading"><small>Signal confidence</small><b id="q">--</b><em id="qt">needs above 6</em></div>
+   <div class="k" title="Received signal strength. Closer to 0 is stronger"><small>Signal strength</small><b id="rssi">--</b><em>dBm</em></div>
+   <div class="k" title="Healthy link is about 100 per second"><small>Link rate</small><b id="pps">--</b><em>packets per second</em></div>
+   <div class="k"><small>Occupied time</small><b id="occ">--</b><em>this session</em></div>
+   <div class="k"><small>Uptime</small><b id="tm">--</b><em id="nd">node --</em></div>
+  </div></div>
+ <div class="card" style="margin-top:16px"><h2>Event timeline</h2><ul class="ev" id="ev"><li><time>--</time>No events yet</li></ul>
+  <details><summary>Raw data stream</summary><pre id="log"></pre></details></div>
+</div>
+</main>
+<footer><b>Hardware:</b> ESP32 (transmitter) + ESP32-C3 (receiver) &nbsp;·&nbsp; <b>Firmware:</b> ESP-IDF, Wi-Fi CSI, adaptive baseline, Goertzel breathing detector &nbsp;·&nbsp; <b>Limits:</b> one link only, accuracy drops with several people or strong Wi-Fi interference. Not a medical device.</footer>
+
+<script>
+const $=id=>document.getElementById(id);
+const INFO={
+ waiting:['…','Waiting for sensor','Click “Connect sensor”, or try Demo mode.'],
+ calibrating:['⏳','Learning the empty room','Please stay out of the sensing area for about 30 seconds.'],
+ empty:['○','Room is empty','No movement or breathing detected.'],
+ moving:['➜','Movement detected','Someone is walking or moving between the sensors.'],
+ still:['♥','Person present, resting','Breathing detected from tiny chest movements.'],
+ hold:['◔','Presence held','Movement stopped recently. Keeping “present” for up to 10 seconds.']};
+const S={state:'waiting',motion:0,thr:0};const H=[],N=120,LOG=[];let demo=null,port=null,last='',tot=0,occ=0,reader=null;
+function ev(m){const u=$('ev');if(u.firstChild&&u.firstChild.textContent.includes('No events'))u.innerHTML='';
+ const l=document.createElement('li');l.innerHTML='<time>'+new Date().toLocaleTimeString()+'</time><span>'+m+'</span>';u.prepend(l);while(u.children.length>30)u.lastChild.remove()}
+function ingest(o){
+ Object.assign(S,o);H.push({m:o.motion,t:o.thr||0});if(H.length>N)H.shift();LOG.push(o);if(LOG.length>5000)LOG.shift();
+ const I=INFO[o.state]||INFO.empty;$('ic').textContent=I[0];$('ic').className='ic s-'+o.state;$('ht').textContent=I[1];
+ $('hd').textContent=o.state==='still'&&o.bpm>0?'Breathing at about '+o.bpm.toFixed(0)+' breaths per minute.':I[2];
+ $('ht').className='s-'+o.state;
+ const cal=o.state==='calibrating';$('bar').style.display=cal?'block':'none';$('bf2').style.width=Math.min(100,o.t/330)+'%';
+ $('bpm').textContent=o.bpm>0?o.bpm.toFixed(1):'--';$('q').textContent=o.q.toFixed(1);
+ $('qt').textContent=o.q>6?'reliable':'needs above 6';
+ $('rssi').textContent=o.rssi.toFixed(0);$('pps').textContent=o.pps;
+ tot++;if(o.present)occ++;$('occ').textContent=Math.round(occ/tot*100)+'%';
+ const s=Math.round(o.t/1000);$('tm').textContent=s>=60?Math.floor(s/60)+'m '+s%60+'s':s+'s';$('nd').textContent='node '+o.node;
+ if(o.state!==last){ev('<b class="s-'+o.state+'">'+I[1]+'</b>');last=o.state}
+}
+function raw(l){const p=$('log');p.textContent=(l+'\n'+p.textContent).split('\n').slice(0,12).join('\n')}
+function feed(line){const i=line.indexOf('{');if(i<0)return;try{const o=JSON.parse(line.slice(i));if('motion'in o){raw(line.slice(i));ingest(o)}}catch(e){}}
+function live(on){$('dot').className='dot'+(on?' live':'');$('conn').textContent=on?'Live sensor':'Not connected';$('bc').classList.toggle('on',on);$('bc').textContent=on?'Disconnect':'Connect sensor'}
+$('bc').onclick=async()=>{
+ if(port){try{await reader.cancel()}catch(e){}return}
+ if(!('serial'in navigator))return alert('Open this page in Chrome or Edge at http://localhost:8000/web/');
+ try{stopDemo();port=await navigator.serial.requestPort();await port.open({baudRate:115200});live(true);ev('Sensor connected');
+  const dec=new TextDecoderStream();port.readable.pipeTo(dec.writable).catch(()=>{});reader=dec.readable.getReader();let buf='';
+  for(;;){const{value,done}=await reader.read();if(done)break;buf+=value;const ls=buf.split('\n');buf=ls.pop();ls.forEach(feed)}
+ }catch(e){raw('serial: '+e.message)}
+ try{await port.close()}catch(e){}port=null;live(false);ev('Sensor disconnected')};
+function stopDemo(){if(demo){clearInterval(demo);demo=null;$('bd').classList.remove('on');$('bd').textContent='Demo mode'}}
+$('bd').onclick=()=>{if(demo)return stopDemo();$('bd').classList.add('on');$('bd').textContent='Stop demo';let s=0;
+ demo=setInterval(()=>{s++;const ph=s%40;let state='empty',mo=.004+Math.random()*.002,bpm=0,q=1.5+Math.random(),pr=0;
+  if(s<=5)state='calibrating';else if(ph<10){}else if(ph<20){state='moving';mo=.03+Math.random()*.03;q=2+Math.random()*2;pr=1}
+  else if(ph<22){state='hold';mo=.01;pr=1}else{state='still';mo=.006+Math.random()*.002;bpm=15+Math.random()*2;q=8+Math.random()*3;pr=1}
+  ingest({node:'demo',t:s*1000,pps:98+Math.round(Math.random()*4),rssi:-48-Math.random()*3,motion:mo,thr:.02,present:pr,state,bpm,q})},1000)};
+$('bx').onclick=()=>{if(!LOG.length)return alert('No data yet');const k=Object.keys(LOG[0]);
+ const c=k.join(',')+'\n'+LOG.map(r=>k.map(x=>r[x]).join(',')).join('\n');
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:'text/csv'}));a.download='csi_sense_'+Date.now()+'.csv';a.click()};
+$('bf').onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
+function fit(c){const d=devicePixelRatio||1;c.width=c.clientWidth*d;c.height=c.clientHeight*d;return d}
+const F=$('field'),P=$('spark');let d1=fit(F),d2=fit(P);addEventListener('resize',()=>{d1=fit(F);d2=fit(P)});
+const C={moving:'#ffc94a',still:'#2cff8a',hold:'#27d3ff',empty:'#7f95b1',calibrating:'#ff4d6d',waiting:'#7f95b1'};
+function draw(t){
+ const x=F.getContext('2d'),w=F.width,h=F.height;x.clearRect(0,0,w,h);
+ x.strokeStyle='#12203a';x.lineWidth=1;for(let i=0;i<w;i+=40*d1){x.beginPath();x.moveTo(i,0);x.lineTo(i,h);x.stroke()}for(let j=0;j<h;j+=40*d1){x.beginPath();x.moveTo(0,j);x.lineTo(w,j);x.stroke()}
+ const A={x:w*.1,y:h/2},B={x:w*.9,y:h/2},lvl=Math.min(1,S.motion/((S.thr||.03)*2));
+ for(let i=0;i<6;i++){const r=((t/18+i*70)%420)*d1;x.strokeStyle=`rgba(39,211,255,${(1-r/(420*d1))*.3})`;x.lineWidth=2*d1;x.beginPath();x.arc(A.x,A.y,r,-1.2,1.2);x.stroke()}
+ x.strokeStyle='rgba(39,211,255,.85)';x.lineWidth=2*d1;x.beginPath();
+ for(let i=0;i<=120;i++){const u=i/120,px=A.x+(B.x-A.x)*u,py=A.y+Math.sin(u*28-t/90)*(4+lvl*40)*d1*Math.sin(u*Math.PI);i?x.lineTo(px,py):x.moveTo(px,py)}x.stroke();
+ [[A,'ESP32 transmitter'],[B,'ESP32-C3 receiver']].forEach(([p,l])=>{x.fillStyle='#0a111c';x.strokeStyle='#27d3ff';x.lineWidth=2*d1;x.fillRect(p.x-18*d1,p.y-18*d1,36*d1,36*d1);x.strokeRect(p.x-18*d1,p.y-18*d1,36*d1,36*d1);x.fillStyle='#e4edf8';x.font=`${12*d1}px system-ui`;x.textAlign='center';x.fillText(l,p.x,p.y+38*d1)});
+ if(['moving','still','hold'].includes(S.state)){
+  const c=C[S.state];let r=h*.13,cx=w/2,cy=h/2;
+  if(S.state==='still'&&S.bpm>0)r*=1+Math.sin(t/1000*2*Math.PI*S.bpm/60)*.14;
+  if(S.state==='moving'){r*=1+Math.sin(t/110)*.08;cx+=Math.sin(t/260)*w*.07*lvl;cy+=Math.cos(t/310)*h*.05*lvl}
+  const g=x.createRadialGradient(cx,cy,0,cx,cy,r*2.2);g.addColorStop(0,c+'cc');g.addColorStop(1,c+'00');
+  x.fillStyle=g;x.beginPath();x.arc(cx,cy,r*2.2,0,7);x.fill();x.fillStyle=c;
+  x.beginPath();x.ellipse(cx,cy+r*.55,r*.7,r*1.1,0,0,7);x.fill();x.beginPath();x.arc(cx,cy-r*.75,r*.38,0,7);x.fill()}
+ const sx=P.getContext('2d'),pw=P.width,ph=P.height;sx.clearRect(0,0,pw,ph);
+ if(H.length>1){const mx=Math.max(...H.map(v=>Math.max(v.m,v.t)))*1.25||1,Y=v=>ph-v/mx*ph;
+  sx.strokeStyle='#ff4d6d';sx.setLineDash([6,6]);sx.lineWidth=d2;sx.beginPath();H.forEach((v,i)=>{const px=i/(N-1)*pw;i?sx.lineTo(px,Y(v.t)):sx.moveTo(px,Y(v.t))});sx.stroke();sx.setLineDash([]);
+  sx.strokeStyle='#2cff8a';sx.lineWidth=2*d2;sx.beginPath();H.forEach((v,i)=>{const px=i/(N-1)*pw;i?sx.lineTo(px,Y(v.m)):sx.moveTo(px,Y(v.m))});sx.stroke()}
+ requestAnimationFrame(draw)}
+requestAnimationFrame(draw);
+</script></body></html>
